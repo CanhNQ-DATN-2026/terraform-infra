@@ -56,7 +56,7 @@ plan:
   stage: plan
   <<: *aws_oidc
   script:
-    - cat .terraform/terraform.tfstate
+    - ls -la .terraform/ 2>&1 || echo "no .terraform dir"
     - terraform plan -input=false -out=tfplan
   artifacts:
     paths:
