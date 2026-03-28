@@ -55,6 +55,8 @@ plan:
   stage: plan
   <<: *aws_oidc
   script:
+    - aws s3 cp s3://bookgate-tf-state-dev-392423995152/dev/terraform.tfstate /tmp/check.tfstate && echo "STATE READ OK" || echo "STATE READ FAILED"
+    - terraform show 2>/dev/null | head -5 || echo "(empty state)"
     - terraform plan -input=false -out=tfplan
   artifacts:
     paths:
