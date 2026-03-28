@@ -76,24 +76,21 @@ data "aws_iam_policy_document" "backend_assume_role" {
 }
 
 data "aws_iam_policy_document" "backend_permissions" {
-  # S3 read access
-  statement {
-    effect    = "Allow"
-    actions   = ["s3:GetObject", "s3:ListBucket"]
-    resources = [module.s3.bucket_arn, "${module.s3.bucket_arn}/*"]
-  }
-
-  # Secrets Manager — chỉ đọc các secret của bookgate
+  # S3 — upload, download, delete book files
   statement {
     effect = "Allow"
     actions = [
-      "secretsmanager:GetSecretValue",
-      "secretsmanager:DescribeSecret",
+      "s3:PutObject",
+      "s3:GetObject",
+      "s3:DeleteObject",
     ]
-    resources = [
-      module.rds.master_user_secret_arn,
-      aws_secretsmanager_secret.app_secrets.arn,
-    ]
+    resources = ["${module.s3.bucket_arn}/*"]
+  }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["s3:ListBucket"]
+    resources = [module.s3.bucket_arn]
   }
 }
 
