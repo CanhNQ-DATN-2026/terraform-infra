@@ -14,7 +14,9 @@ stages:
   - apply
 
 default:
-  image: hashicorp/terraform:1.9
+  image:
+    name: hashicorp/terraform:1.9
+    entrypoint: [""]
   tags:
     - terraform-runner
 
