@@ -49,14 +49,24 @@ output "s3_bucket_arn" {
 # ECR
 # ─────────────────────────────────────────
 
-output "ecr_frontend_repository_url" {
-  description = "ECR repository URL for the BookGate frontend image."
-  value       = module.ecr.frontend_repository_url
+output "ecr_registry_url" {
+  description = "ECR registry URL — set as ECR_REGISTRY in GitLab CI variables."
+  value       = module.ecr.registry_url
 }
 
-output "ecr_backend_repository_url" {
-  description = "ECR repository URL for the BookGate backend image."
-  value       = module.ecr.backend_repository_url
+output "ecr_api_service_repository_url" {
+  description = "ECR repository URL for the api-service image."
+  value       = module.ecr.api_service_repository_url
+}
+
+output "ecr_chat_service_repository_url" {
+  description = "ECR repository URL for the chat-service image."
+  value       = module.ecr.chat_service_repository_url
+}
+
+output "ecr_frontend_repository_url" {
+  description = "ECR repository URL for the frontend image."
+  value       = module.ecr.frontend_repository_url
 }
 
 # ─────────────────────────────────────────
