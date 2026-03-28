@@ -1,12 +1,11 @@
 # .gitlab-ci.yml — Terraform CI/CD pipeline
 #
 # Required CI/CD variables (Settings → CI/CD → Variables):
-#   AWS_ROLE_ARN              — IAM role to assume via OIDC (e.g. arn:aws:iam::ACCOUNT:role/bookgate-terraform-role)
-#   AWS_REGION                — AWS region (e.g. us-east-1)
-#   TF_VAR_s3_bucket_suffix   — AWS account ID for unique S3 bucket naming
+#   AWS_ROLE_ARN  — IAM role to assume via OIDC (e.g. arn:aws:iam::ACCOUNT:role/bookgate-terraform-role)
+#   AWS_REGION    — AWS region (e.g. us-east-1)
 #
-# RDS password is managed by AWS Secrets Manager (manage_master_user_password = true) — no password var needed.
-# All other variables have defaults in variables.tf and can be overridden the same way.
+# All Terraform variables are sourced from terraform.tfvars (committed, no secrets).
+# RDS password is managed by AWS Secrets Manager — no password var needed.
 
 stages:
   - validate

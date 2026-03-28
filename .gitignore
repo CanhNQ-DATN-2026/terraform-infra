@@ -9,8 +9,9 @@ terraform.tfstate.backup
 .terraform.lock.hcl   # commit this if you want reproducible provider versions
 
 # ─── Variable files that may contain secrets ──────────────────────────────────
-# NEVER commit terraform.tfvars — it contains db_password and other secrets.
-terraform.tfvars
+# terraform.tfvars contains no secrets (RDS password is managed by AWS SM).
+# It is committed so CI uses the same variable values as local.
+# *.auto.tfvars files may contain secrets — keep them ignored.
 *.auto.tfvars
 
 # The example file is safe to commit (contains no real secrets).
