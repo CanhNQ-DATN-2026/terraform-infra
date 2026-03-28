@@ -10,7 +10,7 @@ terraform {
     region         = "us-east-1"
     dynamodb_table = "bookgate-tf-lock-dev"
     encrypt        = true
-  } 
+  }
 
   required_providers {
     aws = {
@@ -27,4 +27,4 @@ terraform {
       version = "~> 3.0"
     }
   }
-} 
+}
