@@ -16,7 +16,7 @@ stages:
 default:
   image: hashicorp/terraform:1.9
   tags:
-    - terraform
+    - terraform-runner
 
 # ── OIDC auth helper ────────────────────────────────────────────────────────
 .aws_oidc: &aws_oidc
