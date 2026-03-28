@@ -56,9 +56,7 @@ plan:
   stage: plan
   <<: *aws_oidc
   script:
-    - aws s3 cp s3://bookgate-tf-state-dev-392423995152/dev/terraform.tfstate /tmp/state.json
-    - python3 -c "import json; d=json.load(open('/tmp/state.json')); print('resources in S3 state:', len(d.get('resources',[])))"
-    - terraform state pull | python3 -c "import sys,json; d=json.loads(sys.stdin.read() or '{}'); print('resources via tf pull:', len(d.get('resources',[])))"
+    - cat .terraform/terraform.tfstate
     - terraform plan -input=false -out=tfplan
   artifacts:
     paths:
