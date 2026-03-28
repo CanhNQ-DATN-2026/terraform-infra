@@ -54,6 +54,9 @@ validate:
 # ── plan ────────────────────────────────────────────────────────────────────
 plan:
   stage: plan
+  needs:
+    - job: validate
+      optional: true
   <<: *aws_oidc
   script:
     - ls -la .terraform/ 2>&1 || echo "no .terraform dir"
