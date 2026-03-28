@@ -1,0 +1,28 @@
+# ─── Terraform state & lock ───────────────────────────────────────────────────
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+terraform.tfstate.backup
+
+# ─── Local working directory (downloaded providers & modules) ─────────────────
+.terraform/
+.terraform.lock.hcl   # commit this if you want reproducible provider versions
+
+# ─── Variable files that may contain secrets ──────────────────────────────────
+# NEVER commit terraform.tfvars — it contains db_password and other secrets.
+terraform.tfvars
+*.auto.tfvars
+
+# The example file is safe to commit (contains no real secrets).
+!terraform.tfvars.example
+
+# ─── Plan output files ────────────────────────────────────────────────────────
+*.tfplan
+tfplan
+
+# ─── OS & editor noise ────────────────────────────────────────────────────────
+.DS_Store
+*.swp
+*.swo
+.idea/
+.vscode/

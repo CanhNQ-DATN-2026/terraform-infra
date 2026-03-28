@@ -1,0 +1,71 @@
+# ─────────────────────────────────────────
+# General
+# ─────────────────────────────────────────
+
+aws_region   = "us-east-1"
+project_name = "bookgate"
+environment  = "dev"
+
+# ─────────────────────────────────────────
+# Networking
+# ─────────────────────────────────────────
+
+vpc_cidr                 = "10.0.0.0/16"
+public_subnet_cidrs      = ["10.0.1.0/24", "10.0.2.0/24"]
+private_app_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24"]
+private_db_subnet_cidrs  = ["10.0.21.0/24", "10.0.22.0/24"]
+
+# ─────────────────────────────────────────
+# EC2 Test Instance
+# ─────────────────────────────────────────
+
+instance_type = "t3.micro"
+key_name      = ""   # Leave empty if SSH access is not needed
+
+# ─────────────────────────────────────────
+# RDS PostgreSQL
+# ─────────────────────────────────────────
+
+db_name              = "bookgate"
+db_username          = "bookgate_admin"
+db_password          = "REPLACE_WITH_STRONG_PASSWORD_12CHARS+"  # Min 12 chars — never commit real value
+db_instance_class    = "db.t3.medium"
+db_allocated_storage = 20
+db_deletion_protection = false
+
+# ─────────────────────────────────────────
+# S3
+# ─────────────────────────────────────────
+
+# Use your AWS account ID to guarantee global bucket name uniqueness.
+s3_bucket_suffix = "123456789012"
+
+# ─────────────────────────────────────────
+# ECR
+# ─────────────────────────────────────────
+
+ecr_force_delete = false
+
+# ─────────────────────────────────────────
+# EKS
+# ─────────────────────────────────────────
+
+eks_cluster_name           = "bookgate-eks"
+eks_cluster_version        = "1.29"
+eks_endpoint_public_access = true
+eks_node_instance_types    = ["t3.medium"]
+eks_desired_size           = 2
+eks_min_size               = 1
+eks_max_size               = 4
+eks_log_retention_days     = 7
+
+# ─────────────────────────────────────────
+# Tags
+# ─────────────────────────────────────────
+
+common_tags = {
+  Project     = "BookGate"
+  Environment = "dev"
+  ManagedBy   = "Terraform"
+  Owner       = "platform-team"
+}
