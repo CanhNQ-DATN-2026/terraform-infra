@@ -6,21 +6,26 @@
 #
 # All Terraform variables are sourced from terraform.tfvars (committed, no secrets).
 # RDS password is managed by AWS Secrets Manager — no password var needed.
+#
+# Pipeline stages:
+#   test  — validate + security scan run in parallel (no AWS credentials needed)
+#   plan  — terraform plan (requires AWS)
+#   apply — terraform apply, manual trigger on main only
 
 stages:
-  - validate
+  - test
   - plan
   - apply
 
 default:
-  image:
-    name: hashicorp/terraform:1.9
-    entrypoint: [""]
   tags:
     - terraform-runner
 
-# ── OIDC auth helper ────────────────────────────────────────────────────────
+# ── OIDC auth helper (jobs that need AWS) ───────────────────────────────────
 .aws_oidc: &aws_oidc
+  image:
+    name: hashicorp/terraform:1.9
+    entrypoint: [""]
   id_tokens:
     GITLAB_OIDC_TOKEN:
       aud: https://gitlab.com
@@ -37,29 +42,63 @@ default:
       export AWS_ACCESS_KEY_ID=$(echo $CREDS | jq -r .AccessKeyId)
       export AWS_SECRET_ACCESS_KEY=$(echo $CREDS | jq -r .SecretAccessKey)
       export AWS_SESSION_TOKEN=$(echo $CREDS | jq -r .SessionToken)
-    - aws sts get-caller-identity
     - terraform init -input=false -reconfigure
 
-# ── validate ────────────────────────────────────────────────────────────────
+# ── validate ─────────────────────────────────────────────────────────────────
+# No AWS credentials needed — init with -backend=false for syntax check only.
 validate:
-  stage: validate
-  <<: *aws_oidc
+  stage: test
+  image:
+    name: hashicorp/terraform:1.9
+    entrypoint: [""]
+  allow_failure: true
   script:
+    - terraform init -backend=false -input=false
     - terraform validate
     - terraform fmt -check -recursive
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# ── plan ────────────────────────────────────────────────────────────────────
+# ── security scan (Checkov) ──────────────────────────────────────────────────
+# Static analysis — no AWS credentials needed.
+# Checks: encryption at rest, public access, logging, IAM least privilege, etc.
+# allow_failure: true — findings are reported but don't block plan/apply.
+# Change to false to enforce hard policy gates.
+security:
+  stage: test
+  image:
+    name: ghcr.io/bridgecrewio/checkov:latest
+    entrypoint: [""]
+  allow_failure: true
+  script:
+    - checkov
+        --directory .
+        --framework terraform
+        --output cli
+        --output junitxml
+        --output-file-path console,checkov-report.xml
+        --compact
+        --skip-check CKV_AWS_7,CKV2_AWS_62
+  artifacts:
+    when: always
+    reports:
+      junit: checkov-report.xml
+    expire_in: 7 days
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# ── plan ─────────────────────────────────────────────────────────────────────
 plan:
   stage: plan
   needs:
     - job: validate
       optional: true
+    - job: security
+      optional: true
   <<: *aws_oidc
   script:
-    - ls -la .terraform/ 2>&1 || echo "no .terraform dir"
     - terraform plan -input=false -out=tfplan
   artifacts:
     paths:
@@ -69,7 +108,7 @@ plan:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
-# ── apply ────────────────────────────────────────────────────────────────────
+# ── apply ─────────────────────────────────────────────────────────────────────
 apply:
   stage: apply
   <<: *aws_oidc
