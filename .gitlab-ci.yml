@@ -12,6 +12,8 @@ stages:
   - plan
   - apply
 
+# validate and plan run in parallel; apply waits for plan only.
+
 default:
   image:
     name: hashicorp/terraform:1.9
@@ -54,6 +56,7 @@ validate:
 # ── plan ────────────────────────────────────────────────────────────────────
 plan:
   stage: plan
+  needs: []
   <<: *aws_oidc
   script:
     - cat .terraform/terraform.tfstate
