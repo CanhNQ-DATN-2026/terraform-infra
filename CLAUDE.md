@@ -1,76 +1,110 @@
 # Bookgate Terraform — CLAUDE.md
 
 ## Repo overview
-Terraform quản lý toàn bộ AWS infrastructure cho Bookgate trên EKS.
-Region: `us-east-1`. Environment: `dev` (default).
+Repo này quản lý AWS foundation cho Bookgate:
+- VPC + subnets + routing
+- Security groups
+- EKS + OIDC provider
+- RDS PostgreSQL
+- S3 bucket cho book files
+- ECR repositories
+- IRSA roles cho AWS Load Balancer Controller và backend pod
+- AWS Secrets Manager app secret shell
 
-## Module structure
-```
+Region mặc định: `us-east-1`
+Environment mặc định: `dev`
+
+## Actual structure
+```text
 terraform/
-├── main.tf          # module calls
-├── variables.tf     # input variables
-├── outputs.tf       # outputs — dùng để set CI variables và helm values
-├── terraform.tfvars # giá trị thực (committed, không có secrets)
-├── irsa.tf          # IAM roles cho IRSA (backend pod, LBC, CI)
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── terraform.tfvars
+├── irsa.tf
 ├── providers.tf
 ├── versions.tf
 └── modules/
-    ├── vpc/         # VPC, subnets (public/private-app/private-db), NAT GW
-    ├── security_groups/  # SGs cho EKS nodes, RDS
-    ├── eks/         # EKS cluster + node group + OIDC provider
-    ├── rds/         # RDS PostgreSQL (managed credentials via Secrets Manager)
-    ├── s3/          # S3 bucket cho book files (private)
-    └── ecr/         # ECR repos: bookgate/api-service, bookgate/chat-service, bookgate/frontend
+    ├── vpc/
+    ├── security_groups/
+    ├── eks/
+    ├── rds/
+    ├── s3/
+    └── ecr/
 ```
 
-## Backend
-- S3: `bookgate-tf-state-dev-392423995152/dev/terraform.tfstate`
-- DynamoDB lock: `bookgate-tf-lock-dev`
-- Workspace: `default`
+Không có `alb` module, `ec2_test` module, hay `db_password` input theo code hiện tại.
 
-## Key outputs (dùng để config CI và Helm)
-| Output | Dùng cho |
-|--------|---------|
-| `ecr_registry_url` | CI variable `ECR_REGISTRY` |
-| `backend_role_arn` | Helm value `apiService.serviceAccount.roleArn` và CI var `BACKEND_ROLE_ARN` |
-| `lbc_role_arn` | Helm install AWS LBC |
-| `s3_bucket_name` | Helm value `apiService.env.s3BucketName` |
-| `rds_endpoint` | Phần của `DATABASE_URL` trong Secrets Manager |
-| `app_secrets_secret_arn` | Tham khảo khi điền secret vào SM |
+## Important outputs actually present
+| Output | Meaning |
+|---|---|
+| `ecr_frontend_repository_url` | full repo URL cho frontend |
+| `ecr_backend_repository_url` | full repo URL cho backend/api workloads |
+| `s3_bucket_name` | bucket name cho app |
+| `s3_bucket_arn` | bucket ARN cho IRSA policies |
+| `rds_endpoint` | RDS endpoint |
+| `eks_cluster_name` | cluster name |
+| `eks_cluster_endpoint` | API endpoint |
+| `eks_cluster_oidc_issuer` | OIDC issuer URL |
+| `eks_oidc_provider_arn` | OIDC provider ARN |
+| `backend_role_arn` | IRSA role ARN cho `backend-sa` |
+| `lbc_role_arn` | IRSA role ARN cho AWS LBC |
+| `db_credentials_secret_arn` | ARN của RDS-managed credentials secret |
+| `app_secrets_secret_arn` | ARN của `${project}/${environment}/app-secrets` |
 
-## IRSA roles (irsa.tf)
-| Role | ServiceAccount | Permissions |
-|------|---------------|-------------|
-| `bookgate-eks-backend-role` | `bookgate/backend-sa` | S3: PutObject, GetObject, DeleteObject, ListBucket |
-| `bookgate-eks-lbc-role` | `kube-system/aws-load-balancer-controller` | LBC policy (từ GitHub) |
+Repo này hiện không có output `ecr_registry_url`.
 
-**Không có SM permissions** cho backend pod — ESO handle secrets riêng qua ClusterSecretStore.
+## IRSA
+
+### AWS Load Balancer Controller
+- ServiceAccount target: `kube-system/aws-load-balancer-controller`
+- Output: `lbc_role_arn`
+
+### Backend pod
+- ServiceAccount target: `bookgate/backend-sa`
+- Output: `backend_role_arn`
+- Permissions:
+  - `s3:PutObject`
+  - `s3:GetObject`
+  - `s3:DeleteObject`
+  - `s3:ListBucket`
+
+Backend pod không có Secrets Manager permission.
 
 ## Secrets Manager
-- Shell secret được tạo bởi Terraform: `bookgate/dev/app-secrets`
-- **Giá trị điền thủ công** trên AWS Console hoặc CLI:
-```bash
-aws secretsmanager put-secret-value \
-  --secret-id bookgate/dev/app-secrets \
-  --secret-string '{"DATABASE_URL":"postgresql://...","SECRET_KEY":"...","ADMIN_PASSWORD":"...","OPENAI_API_KEY":"..."}'
-```
+- Terraform tạo shell secret:
+  - `${project_name}/${environment}/app-secrets`
+  - ví dụ `bookgate/dev/app-secrets`
+- Terraform không tự populate values
+- Operator phải điền các key:
+  - `DATABASE_URL`
+  - `SECRET_KEY`
+  - `ADMIN_PASSWORD`
+  - `OPENAI_API_KEY`
+
+`DATABASE_URL` được construct từ:
+- `rds_endpoint`
+- password lấy từ `db_credentials_secret_arn`
 
 ## CI/CD
-- Pipeline: `.gitlab-ci.yml` — stages: `test` (validate + checkov song song) → `plan` → `apply`
-- OIDC: GitLab → `sts:AssumeRoleWithWebIdentity` → `datn-terraform-role`
-- validate: `terraform init -backend=false` (không cần AWS credentials)
-- checkov: scan security, skip `CKV_AWS_7,CKV2_AWS_62` — `allow_failure: true`
-- apply: manual, chỉ chạy trên `main` branch
+- Pipeline file: `.gitlab-ci.yml`
+- Stages:
+  - `test` → `validate`, `security`
+  - `plan`
+  - `apply`
+- AWS auth: GitLab OIDC → `AssumeRoleWithWebIdentity`
+- `apply` là manual trên branch mặc định
 
-## CI variables (GitLab repo settings)
-| Variable | Giá trị |
-|----------|--------|
-| `AWS_ROLE_ARN` | `arn:aws:iam::392423995152:role/datn-terraform-role` |
-| `AWS_REGION` | `us-east-1` |
-| `TF_VAR_s3_bucket_suffix` | `392423995152` |
+## CI variables
+| Variable | Meaning |
+|---|---|
+| `AWS_ROLE_ARN` | IAM role cho Terraform CI |
+| `AWS_REGION` | AWS region |
 
-## Quan trọng
-- `terraform.tfvars` đã được commit (không có secrets — RDS password managed by AWS)
-- ECR repos dùng path-style name: `bookgate/api-service`, `bookgate/chat-service`, `bookgate/frontend`
-- EKS cluster dùng `CONFIG_MAP` auth mode (không phải `API` mode) — `aws eks associate-access-policy` không hoạt động, phải edit `aws-auth` ConfigMap
-- `ecr_force_delete = false` trong tfvars — nếu destroy khi ECR có images sẽ lỗi, phải xóa images trước hoặc set `true`
+`terraform.tfvars` đã commit và hiện chứa non-secret config; không cần `TF_VAR_*` để pipeline chạy theo trạng thái repo hiện tại.
+
+## Important notes
+- Nếu muốn cấp `ECR_REGISTRY` cho app/helm CI, phải derive từ outputs repo này hoặc thêm output registry riêng
+- `app_secrets_secret_arn` là ARN, không phải secret name; Helm thường cần secret name/path, ví dụ `bookgate/dev/app-secrets`
+- `backend_role_arn` phải được truyền sang Helm values `apiService.serviceAccount.roleArn`
+- `ecr_force_delete = false`: destroy sẽ fail nếu repo ECR còn images

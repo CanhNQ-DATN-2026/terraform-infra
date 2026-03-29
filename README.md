@@ -1,325 +1,178 @@
-# BookGate — AWS Infrastructure (Terraform)
+# Bookgate — Terraform Repo
 
-Production-style Terraform project that provisions the complete AWS foundation for **BookGate**, a role-based digital library / online bookstore platform. Designed to host a future EKS-based 3-tier application (frontend, backend, PostgreSQL, S3, ECR).
+Terraform repo for provisioning the AWS foundation used by Bookgate.
 
-> **Phase 1 goal:** validate VPC routing, ALB reachability, NAT outbound access, and private/public network behaviour using a temporary Nginx EC2 instance — before deploying any real application workloads on EKS.
+This repo currently provisions:
+- VPC and subnets
+- route tables, IGW, NAT
+- security groups
+- EKS cluster and node group
+- EKS OIDC provider
+- RDS PostgreSQL
+- S3 bucket
+- ECR repositories
+- IRSA roles for:
+  - AWS Load Balancer Controller
+  - backend pod
+- AWS Secrets Manager application secret shell
 
----
+## Repo layout
 
-## Architecture Overview
-
-```
-Internet
-    │
-    ▼
-┌──────────────────────────────────────────────────────┐
-│  VPC  10.0.0.0/16                                    │
-│                                                      │
-│  ┌───────────────────────────────────────────────┐   │
-│  │  Public Subnets  (AZ-a / AZ-b)               │   │
-│  │  • Internet Gateway                           │   │
-│  │  • NAT Gateway × 2  (one per AZ, HA)         │   │
-│  │  • Application Load Balancer  (HTTP :80)      │   │
-│  └──────────────────┬────────────────────────────┘   │
-│                     │ (forward to port 80)           │
-│  ┌──────────────────▼────────────────────────────┐   │
-│  │  Private App Subnets  (AZ-a / AZ-b)          │   │
-│  │  • Temporary Nginx EC2  (ALB target)          │   │
-│  │  • EKS Managed Node Group  (future workloads) │   │
-│  └──────────────────┬────────────────────────────┘   │
-│                     │ (port 5432)                    │
-│  ┌──────────────────▼────────────────────────────┐   │
-│  │  Private DB Subnets  (AZ-a / AZ-b)           │   │
-│  │  • RDS PostgreSQL  Multi-AZ                   │   │
-│  │  • No internet route                          │   │
-│  └───────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────┘
-
-Regional / global services (no subnet placement):
-  • S3    — versioned, AES-256 encrypted, all-public-access blocked
-  • ECR   — bookgate-frontend, bookgate-backend; scan-on-push + lifecycle rules
-  • EKS   — control plane + managed node group + OIDC provider (IRSA-ready)
-```
-
-### Traffic paths validated by the Nginx test
-
-| Path | Mechanism |
-|---|---|
-| Internet → Nginx | Client → ALB (public subnet) → EC2 (private app subnet) |
-| Nginx install | EC2 → route table → NAT Gateway → Internet (dnf install nginx) |
-| ALB health check | ALB SG egress port 80 → VPC CIDR → EC2 SG ingress from ALB SG |
-| RDS access (future) | EKS node SG attached via launch template → RDS SG ingress |
-
-### Intentional exclusions in this phase
-
-| Excluded | Reason |
-|---|---|
-| Route 53 | Not needed — access via raw ALB DNS name |
-| AWS Secrets Manager | Not needed — DB credentials passed as Terraform variables |
-| HTTPS / ACM | Not needed — HTTP-only for network validation |
-| Kubernetes workloads | Phase 2 — EKS infra is provisioned, no manifests deployed yet |
-
----
-
-## Module Structure
-
-```
+```text
 terraform/
-├── .gitignore
-├── versions.tf                  # Terraform ≥ 1.5, AWS ~5.0, TLS ~4.0
-├── providers.tf                 # AWS provider with default_tags
-├── variables.tf                 # All input variables with validation blocks
-├── terraform.tfvars.example     # Copy → terraform.tfvars and fill in secrets
-├── main.tf                      # Root module — composes all child modules
-├── outputs.tf                   # 18 root-level outputs
-├── README.md
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── terraform.tfvars
+├── irsa.tf
+├── providers.tf
+├── versions.tf
 └── modules/
-    ├── vpc/              VPC, subnets, IGW, NAT GWs (×2), route tables
-    ├── security_groups/  alb_sg, test_ec2_sg, eks_nodes_sg, rds_sg
-    ├── alb/              Internet-facing ALB, target group, HTTP listener
-    ├── ec2_test/         Temporary Nginx instance + ALB TG attachment
-    ├── rds/              RDS PostgreSQL Multi-AZ, subnet group, param group
-    ├── s3/               Private S3 bucket (versioned, AES-256, no-ACL)
-    ├── ecr/              ECR repos (frontend + backend) + lifecycle rules
-    └── eks/              EKS cluster, OIDC provider, IAM roles, node group
-                          + launch template (custom SG + IMDSv2)
+    ├── vpc/
+    ├── security_groups/
+    ├── eks/
+    ├── rds/
+    ├── s3/
+    └── ecr/
 ```
 
----
+## What this repo does not do
 
-## Security Group Design
+- does not deploy application manifests
+- does not populate runtime secret values automatically
+- does not create application data inside PostgreSQL
 
-```
-0.0.0.0/0 ──:80──► alb_sg ──:80──► test_ec2_sg  ──egress all──► NAT → internet
-                                                                   (dnf installs)
-test_ec2_sg ──:5432──► rds_sg (egress: VPC CIDR only)
-eks_nodes_sg ─:5432──► rds_sg
+## Key resources
 
-eks_nodes_sg:  self + VPC CIDR :443 + VPC CIDR :1025-65535 + egress all
-```
+### EKS
+- cluster name from `eks_cluster_name`
+- OIDC provider created at cluster creation time
+- node group lives in private app subnets
 
----
+### RDS
+- PostgreSQL instance
+- master password managed by AWS
+- RDS also creates its own credentials secret in Secrets Manager
 
-## Prerequisites
+### S3
+- single bucket for book files
 
-| Tool | Minimum version |
-|---|---|
-| Terraform | 1.5.0 |
-| AWS CLI | 2.x (configured with `aws configure`) |
-| kubectl | 1.27+ (for future EKS interaction) |
+### ECR
+Repositories exposed by current outputs:
+- `api-service`
+- `chat-service`
+- `frontend`
 
----
+### Secrets Manager
+Terraform creates a shell secret:
+- `${project_name}/${environment}/app-secrets`
+- example: `bookgate/dev/app-secrets`
 
-## Quick Start
+Terraform does not populate its values.
 
-### 1. Configure variables
+Expected keys to populate manually:
+- `DATABASE_URL`
+- `SECRET_KEY`
+- `ADMIN_PASSWORD`
+- `OPENAI_API_KEY`
 
-```bash
-cd terraform/
-cp terraform.tfvars.example terraform.tfvars
-```
+## IRSA roles
 
-Edit `terraform.tfvars`. At a minimum set:
+### Backend pod
+- output: `backend_role_arn`
+- intended ServiceAccount: `bookgate/backend-sa`
+- permissions:
+  - `s3:PutObject`
+  - `s3:GetObject`
+  - `s3:DeleteObject`
+  - `s3:ListBucket`
 
-```hcl
-db_password      = "YourStr0ng!Password"  # min 12 chars, never commit
-s3_bucket_suffix = "123456789012"          # your AWS account ID
-```
+### AWS Load Balancer Controller
+- output: `lbc_role_arn`
+- intended ServiceAccount: `kube-system/aws-load-balancer-controller`
 
-### 2. Initialise
-
-```bash
-terraform init
-```
-
-### 3. Validate
-
-```bash
-terraform validate
-# Expected: Success! The configuration is valid.
-```
-
-### 4. Plan
-
-```bash
-terraform plan -out=tfplan
-```
-
-Review the output. Expected: ~65–70 resources to add.
-
-### 5. Apply
-
-```bash
-terraform apply tfplan
-```
-
-> First apply takes **15–25 minutes**. EKS cluster creation (~10 min) and RDS Multi-AZ provisioning (~10 min) are the slow resources.
-
-### 6. View outputs
-
-```bash
-terraform output
-```
-
----
-
-## Key Outputs
+## Important outputs
 
 | Output | Purpose |
 |---|---|
-| `alb_dns_name` | Test the Nginx page: `curl http://<value>` |
-| `kubeconfig_command` | Configure kubectl — copy and run directly |
-| `rds_endpoint` | DB connection string for future app config |
-| `eks_cluster_oidc_issuer` | OIDC URL for creating IRSA roles |
-| `eks_oidc_provider_arn` | Federated principal in IRSA trust policies |
-| `ecr_frontend_repository_url` | Push frontend images here |
-| `ecr_backend_repository_url` | Push backend images here |
-| `s3_bucket_arn` | Use in IRSA S3 access policies |
+| `ecr_registry_url` | Set as `ECR_REGISTRY` in app/helm CI |
+| `ecr_api_service_repository_url` | Full api-service repo URL |
+| `ecr_chat_service_repository_url` | Full chat-service repo URL |
+| `ecr_frontend_repository_url` | Full frontend repo URL |
+| `s3_bucket_name` | Passed into Helm values |
+| `s3_bucket_arn` | Used in IRSA S3 policy |
+| `rds_endpoint` | Used to build `DATABASE_URL` |
+| `eks_cluster_name` | Used by Helm CI and kubectl |
+| `eks_cluster_endpoint` | Cluster API endpoint |
+| `eks_cluster_oidc_issuer` | IRSA trust setup |
+| `eks_oidc_provider_arn` | IRSA trust setup |
+| `backend_role_arn` | Passed into Helm value `apiService.serviceAccount.roleArn` |
+| `lbc_role_arn` | Used for AWS LBC install |
+| `db_credentials_secret_arn` | Read RDS password from Secrets Manager |
+| `app_secrets_secret_arn` | ARN of app secret shell |
 
----
+## Secrets setup
 
-## Validate the ALB + Nginx Endpoint
+After `terraform apply`, operator should:
+1. get `rds_endpoint`
+2. get password from `db_credentials_secret_arn`
+3. build `DATABASE_URL`
+4. populate `${project_name}/${environment}/app-secrets`
 
-After `terraform apply`, wait **2–3 minutes** for the EC2 user_data script to complete and the ALB health check to pass.
-
-```bash
-# Get the ALB DNS
-ALB=$(terraform output -raw alb_dns_name)
-
-# Smoke test
-curl -s http://${ALB}
-# Expected output contains: "BookGate test nginx running in private subnet"
-```
-
-You can also open `http://<alb_dns_name>` in a browser.
-
-### Troubleshooting the health check
+Example:
 
 ```bash
-# 1. Check EC2 instance state (should be "running")
-aws ec2 describe-instance-status \
-  --instance-ids $(terraform output -raw test_ec2_instance_id) \
-  --query 'InstanceStatuses[*].InstanceState.Name' \
-  --output text
+DB_HOST=$(terraform output -raw rds_endpoint | cut -d: -f1)
+DB_PASS=$(aws secretsmanager get-secret-value \
+  --secret-id "$(terraform output -raw db_credentials_secret_arn)" \
+  --query SecretString --output text | jq -r .password)
 
-# 2. Check ALB target health (should transition to "healthy" within ~60 s)
-aws elbv2 describe-target-health \
-  --target-group-arn $(terraform state show module.alb.aws_lb_target_group.nginx \
-    | grep arn | head -1 | awk '{print $3}' | tr -d '"')
-
-# 3. Check user_data execution log on the instance (requires SSM or bastion)
-# If the EC2 is unhealthy: verify the NAT gateway EIPs are allocated and that
-# the private app route table has a 0.0.0.0/0 → NAT route.
+aws secretsmanager put-secret-value \
+  --secret-id "bookgate/dev/app-secrets" \
+  --secret-string "$(jq -n \
+    --arg db  "postgresql://bookgate_admin:${DB_PASS}@${DB_HOST}:5432/bookgate" \
+    --arg sk  "CHANGE_ME_32_char_random_string" \
+    --arg ap  "CHANGE_ME_admin_password" \
+    --arg oai "sk-..." \
+    '{DATABASE_URL:$db, SECRET_KEY:$sk, ADMIN_PASSWORD:$ap, OPENAI_API_KEY:$oai}')"
 ```
 
----
-
-## Configure kubectl for EKS
+## Quick start
 
 ```bash
-# This is also printed as the `kubeconfig_command` output:
-aws eks update-kubeconfig \
-  --region $(terraform output -raw aws_region 2>/dev/null || echo "us-east-1") \
-  --name $(terraform output -raw eks_cluster_name)
-
-kubectl get nodes
-kubectl get pods -A
+cd terraform
+terraform init
+terraform validate
+terraform plan -out=tfplan
+terraform apply tfplan
+terraform output
 ```
 
----
+Configuration lives in committed `terraform.tfvars`.
 
-## Destroy
+## CI/CD
 
-```bash
-# If the S3 bucket has objects, empty it first:
-aws s3 rm s3://$(terraform output -raw s3_bucket_name) --recursive
+Pipeline file: `.gitlab-ci.yml`
 
-terraform destroy
-```
+Stages:
+- `test`
+  - `validate`
+  - `security`
+- `plan`
+- `apply`
 
----
+Behavior:
+- GitLab OIDC -> `AssumeRoleWithWebIdentity`
+- `validate` runs with `-backend=false`
+- `plan` and `apply` use AWS credentials
+- `apply` is manual on default branch
 
-## Future: Migrating from EC2 Test to EKS Workloads
-
-This infrastructure is designed to be extended in-place.
-
-### Step 1 — Push images to ECR
-
-```bash
-AWS_ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-AWS_REGION=us-east-1
-
-aws ecr get-login-password --region ${AWS_REGION} | \
-  docker login --username AWS --password-stdin \
-  ${AWS_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com
-
-# Frontend
-docker build -t bookgate-frontend ./frontend
-docker tag bookgate-frontend:latest \
-  $(terraform output -raw ecr_frontend_repository_url):latest
-docker push $(terraform output -raw ecr_frontend_repository_url):latest
-
-# Repeat for backend
-```
-
-### Step 2 — Install the AWS Load Balancer Controller (LBC)
-
-The LBC reads the `kubernetes.io/role/elb` subnet tags (already applied) and
-provisions ALBs automatically from `Ingress` resources.
-
-```bash
-# Add EKS chart repo
-helm repo add eks https://aws.github.io/eks-charts && helm repo update
-
-# Create an IRSA role for the LBC using the oidc_provider_arn output,
-# then install the controller:
-helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
-  -n kube-system \
-  --set clusterName=$(terraform output -raw eks_cluster_name) \
-  --set serviceAccount.create=true \
-  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=<lbc-irsa-role-arn>
-```
-
-### Step 3 — Deploy application manifests
-
-Write `Deployment`, `Service`, and `Ingress` resources. The LBC will
-create a new ALB and `TargetGroupBinding` pointing to your pods.
-
-### Step 4 — Remove the EC2 test module
-
-Once your EKS workloads are healthy behind the LBC-managed ALB, remove
-the `module "ec2_test"` block from `main.tf` and run `terraform apply`.
-
-### Step 5 — Wire RDS and S3 access via IRSA
-
-Use the `eks_oidc_provider_arn` and `eks_cluster_oidc_issuer` outputs to
-create IRSA IAM roles scoped to specific Kubernetes service accounts. Mount
-them into your pods — no static credentials, no node-level IAM.
-
-```hcl
-# Example IRSA trust policy (add to your backend service role)
-data "aws_iam_policy_document" "backend_assume_role" {
-  statement {
-    principals {
-      type        = "Federated"
-      identifiers = [module.eks.oidc_provider_arn]
-    }
-    actions = ["sts:AssumeRoleWithWebIdentity"]
-    condition {
-      test     = "StringEquals"
-      variable = "${trimprefix(module.eks.cluster_oidc_issuer, "https://")}:sub"
-      values   = ["system:serviceaccount:bookgate:backend"]
-    }
-  }
-}
-```
-
----
+Required GitLab CI variables:
+- `AWS_ROLE_ARN`
+- `AWS_REGION`
 
 ## Notes
 
-- **Route 53** is intentionally excluded in this phase — the ALB DNS name is used directly.
-- **AWS Secrets Manager** is intentionally excluded — `db_password` is a Terraform variable marked `sensitive`. Move to Secrets Manager or External Secrets Operator before production.
-- **CloudWatch log retention** for EKS control-plane logs defaults to 7 days (configurable via `eks_log_retention_days`). Without this pre-created log group, EKS would create one with no expiry.
-- **OIDC provider** is provisioned at cluster creation time even though IRSA is not used in Phase 1. This avoids a destructive cluster-level change later.
-- **IMDSv2** is enforced on both the EC2 test instance and EKS worker nodes. The worker node launch template sets `http_put_response_hop_limit = 2` so that pods inside containers can reach the metadata service for IRSA token exchange.
+- `terraform.tfvars` contains non-secret config and is committed
+- `ecr_force_delete = false` means destroy fails if ECR repos still contain images
+- `app_secrets_secret_arn` is an ARN; Helm usually needs the secret name/path, e.g. `bookgate/dev/app-secrets`
