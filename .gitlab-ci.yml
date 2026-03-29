@@ -105,10 +105,12 @@ plan:
       - tfplan
     expire_in: 1 day
   rules:
+    # MR: plan runs but artifact không dùng để apply (apply bị block)
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 
 # ── apply ─────────────────────────────────────────────────────────────────────
+# Chỉ chạy trên main branch, manual. Không bao giờ chạy trên MR.
 apply:
   stage: apply
   <<: *aws_oidc
@@ -117,5 +119,7 @@ apply:
   dependencies:
     - plan
   rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
       when: manual
