@@ -20,6 +20,9 @@ stages:
 default:
   tags:
     - terraform-runner
+  # Xóa container + image sau mỗi job để tránh tích tụ disk
+  after_script:
+    - docker image prune -f 2>/dev/null || true
 
 # ── OIDC auth helper (jobs that need AWS) ───────────────────────────────────
 .aws_oidc: &aws_oidc
@@ -68,7 +71,7 @@ validate:
 security:
   stage: test
   image:
-    name: ghcr.io/bridgecrewio/checkov:latest
+    name: ghcr.io/bridgecrewio/checkov:3.2.0-slim
     entrypoint: [""]
   allow_failure: true
   script:
