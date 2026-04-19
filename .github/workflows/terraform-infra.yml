@@ -65,14 +65,13 @@ jobs:
             -v "$PWD":/tf \
             -w /tf \
             bridgecrew/checkov:${CHECKOV_VERSION} \
-            checkov \
-              --directory . \
-              --framework terraform \
-              --output cli \
-              --output junitxml \
-              --output-file-path console,reports/checkov-report.xml \
-              --compact \
-              --skip-check CKV_AWS_7,CKV2_AWS_62
+            --directory . \
+            --framework terraform \
+            --output cli \
+            --output junitxml \
+            --output-file-path console,reports/checkov-report.xml \
+            --compact \
+            --skip-check CKV_AWS_7,CKV2_AWS_62
 
       - name: Upload Checkov Report
         if: always()
