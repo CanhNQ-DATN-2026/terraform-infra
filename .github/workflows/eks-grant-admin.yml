@@ -1,0 +1,147 @@
+name: EKS Grant Admin Access
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: eks-grant-admin-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  EKS_CLUSTER_NAME: "bookgate-eks"
+  TARGET_USER_ARN: "arn:aws:iam::392423995152:user/canhnq-admin"
+  TARGET_USERNAME: "canhnq-admin"
+
+jobs:
+  grant-admin:
+    name: Grant Cluster Admin To canhnq-admin
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: github-actions-eks-grant-admin
+
+      - name: Set Up Kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.29.15
+
+      - name: Update Kubeconfig
+        run: aws eks update-kubeconfig --region "${AWS_REGION}" --name "${EKS_CLUSTER_NAME}"
+
+      - name: Backup aws-auth
+        run: kubectl get configmap aws-auth -n kube-system -o yaml > aws-auth-backup.yaml
+
+      - name: Upload aws-auth Backup
+        uses: actions/upload-artifact@v4
+        with:
+          name: aws-auth-backup
+          path: aws-auth-backup.yaml
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Install PyYAML
+        run: python3 -m pip install --user pyyaml
+
+      - name: Merge Target User Into aws-auth
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          kubectl get configmap aws-auth -n kube-system -o json > aws-auth.json
+
+          python3 - <<'PY'
+          import json
+          import os
+          import yaml
+
+          target_user_arn = os.environ["TARGET_USER_ARN"]
+          target_username = os.environ["TARGET_USERNAME"]
+
+          with open("aws-auth.json", "r", encoding="utf-8") as fh:
+              configmap = json.load(fh)
+
+          data = configmap.setdefault("data", {})
+          map_users_raw = data.get("mapUsers", "")
+          map_users = yaml.safe_load(map_users_raw) if map_users_raw.strip() else []
+
+          if map_users is None:
+              map_users = []
+
+          if not isinstance(map_users, list):
+              raise SystemExit("aws-auth data.mapUsers is not a YAML list; refusing to modify it automatically.")
+
+          desired_entry = {
+              "userarn": target_user_arn,
+              "username": target_username,
+              "groups": ["system:masters"],
+          }
+
+          already_present = any(
+              isinstance(entry, dict) and entry.get("userarn") == target_user_arn
+              for entry in map_users
+          )
+
+          if not already_present:
+              map_users.append(desired_entry)
+
+          data["mapUsers"] = yaml.safe_dump(
+              map_users,
+              sort_keys=False,
+              default_flow_style=False,
+          ).rstrip()
+
+          with open("aws-auth-updated.json", "w", encoding="utf-8") as fh:
+              json.dump(configmap, fh)
+          PY
+
+      - name: Apply Updated aws-auth
+        run: kubectl replace -f aws-auth-updated.json
+
+      - name: Verify User Mapping
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          kubectl get configmap aws-auth -n kube-system -o json > aws-auth-verify.json
+
+          python3 - <<'PY'
+          import json
+          import os
+          import yaml
+
+          target_user_arn = os.environ["TARGET_USER_ARN"]
+
+          with open("aws-auth-verify.json", "r", encoding="utf-8") as fh:
+              configmap = json.load(fh)
+
+          map_users_raw = configmap.get("data", {}).get("mapUsers", "")
+          map_users = yaml.safe_load(map_users_raw) if map_users_raw.strip() else []
+
+          if not any(isinstance(entry, dict) and entry.get("userarn") == target_user_arn for entry in map_users or []):
+              raise SystemExit(f"{target_user_arn} not found in aws-auth after apply")
+
+          print(f"Verified {target_user_arn} is present in aws-auth mapUsers.")
+          PY
+
+      - name: Write Summary
+        run: |
+          {
+            echo "Granted Kubernetes admin access through aws-auth."
+            echo ""
+            echo "User ARN: ${TARGET_USER_ARN}"
+            echo "Cluster: ${EKS_CLUSTER_NAME}"
+          } >> "$GITHUB_STEP_SUMMARY"
