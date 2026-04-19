@@ -2,6 +2,15 @@ name: EKS Grant Admin Access
 
 on:
   workflow_dispatch:
+    inputs:
+      target_user_arn:
+        description: "IAM user ARN to grant Kubernetes cluster-admin access"
+        required: true
+        type: string
+      target_username:
+        description: "Username to write into aws-auth for this IAM user"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,12 +23,10 @@ concurrency:
 env:
   AWS_REGION: ${{ vars.AWS_REGION }}
   EKS_CLUSTER_NAME: "bookgate-eks"
-  TARGET_USER_ARN: "arn:aws:iam::392423995152:user/canhnq-admin"
-  TARGET_USERNAME: "canhnq-admin"
 
 jobs:
   grant-admin:
-    name: Grant Cluster Admin To canhnq-admin
+    name: Grant Cluster Admin To Requested User
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
@@ -58,6 +65,9 @@ jobs:
 
       - name: Merge Target User Into aws-auth
         shell: bash
+        env:
+          INPUT_TARGET_USER_ARN: ${{ github.event.inputs.target_user_arn }}
+          INPUT_TARGET_USERNAME: ${{ github.event.inputs.target_username }}
         run: |
           set -euo pipefail
 
@@ -68,8 +78,8 @@ jobs:
           import os
           import yaml
 
-          target_user_arn = os.environ["TARGET_USER_ARN"]
-          target_username = os.environ["TARGET_USERNAME"]
+          target_user_arn = os.environ["INPUT_TARGET_USER_ARN"]
+          target_username = os.environ["INPUT_TARGET_USERNAME"]
 
           with open("aws-auth.json", "r", encoding="utf-8") as fh:
               configmap = json.load(fh)
@@ -113,6 +123,8 @@ jobs:
 
       - name: Verify User Mapping
         shell: bash
+        env:
+          INPUT_TARGET_USER_ARN: ${{ github.event.inputs.target_user_arn }}
         run: |
           set -euo pipefail
 
@@ -123,7 +135,7 @@ jobs:
           import os
           import yaml
 
-          target_user_arn = os.environ["TARGET_USER_ARN"]
+          target_user_arn = os.environ["INPUT_TARGET_USER_ARN"]
 
           with open("aws-auth-verify.json", "r", encoding="utf-8") as fh:
               configmap = json.load(fh)
@@ -142,6 +154,7 @@ jobs:
           {
             echo "Granted Kubernetes admin access through aws-auth."
             echo ""
-            echo "User ARN: ${TARGET_USER_ARN}"
+            echo "User ARN: ${{ github.event.inputs.target_user_arn }}"
+            echo "Username: ${{ github.event.inputs.target_username }}"
             echo "Cluster: ${EKS_CLUSTER_NAME}"
           } >> "$GITHUB_STEP_SUMMARY"
