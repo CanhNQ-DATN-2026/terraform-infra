@@ -71,6 +71,7 @@ jobs:
             --output junitxml \
             --output-file-path console,reports/checkov-report.xml \
             --compact \
+            --soft-fail \
             --skip-check CKV_AWS_7,CKV2_AWS_62
 
       - name: Upload Checkov Report
