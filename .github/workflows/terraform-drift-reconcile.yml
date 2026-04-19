@@ -54,23 +54,23 @@ jobs:
         shell: bash
         run: |
           set +e
-          terraform plan -refresh-only -detailed-exitcode -out=drift-refresh.tfplan
+          terraform plan -input=false -detailed-exitcode -out=tfplan
           exit_code=$?
           set -e
 
           case "$exit_code" in
             0)
               echo "drift_found=false" >> "$GITHUB_OUTPUT"
-              echo "No infrastructure drift detected." >> "$GITHUB_STEP_SUMMARY"
+              echo "No actionable drift detected. Terraform would not change any AWS resources to match the code on main." >> "$GITHUB_STEP_SUMMARY"
               ;;
             2)
               echo "drift_found=true" >> "$GITHUB_OUTPUT"
               if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-                echo "Infrastructure drift detected. This manual run will continue to reconcile AWS back to the code on main." >> "$GITHUB_STEP_SUMMARY"
+                echo "Actionable drift detected. This manual run will continue to reconcile AWS back to the code on main." >> "$GITHUB_STEP_SUMMARY"
               else
-                echo "Infrastructure drift detected. Scheduled runs only report drift; start this workflow manually to reconcile AWS back to the code on main." >> "$GITHUB_STEP_SUMMARY"
+                echo "Actionable drift detected. Scheduled runs only report changes that Terraform would actually correct; start this workflow manually to reconcile AWS back to the code on main." >> "$GITHUB_STEP_SUMMARY"
               fi
-              terraform show -no-color drift-refresh.tfplan > drift-refresh.txt
+              terraform show -no-color tfplan > drift-plan.txt
               ;;
             *)
               echo "Terraform drift detection failed with exit code $exit_code." >> "$GITHUB_STEP_SUMMARY"
@@ -82,8 +82,17 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: drift-refresh-report
-          path: drift-refresh.txt
+          name: drift-plan-report
+          path: drift-plan.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload Drift Plan
+        if: steps.detect.outputs.drift_found == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-tfplan
+          path: tfplan
           if-no-files-found: ignore
           retention-days: 7
 
@@ -114,16 +123,11 @@ jobs:
       - name: Terraform Init
         run: terraform init -input=false -reconfigure
 
-      - name: Terraform Plan To Code
-        run: terraform plan -input=false -out=tfplan
-
-      - name: Upload Reconcile Plan
-        uses: actions/upload-artifact@v4
+      - name: Download Drift Plan
+        uses: actions/download-artifact@v4
         with:
-          name: drift-reconcile-plan
-          path: tfplan
-          if-no-files-found: error
-          retention-days: 7
+          name: drift-tfplan
+          path: .
 
       - name: Terraform Apply
         run: terraform apply -input=false -auto-approve tfplan
