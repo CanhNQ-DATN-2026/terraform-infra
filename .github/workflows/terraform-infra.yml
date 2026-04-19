@@ -21,6 +21,7 @@ env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   TF_VERSION: "1.9.0"
+  CHECKOV_VERSION: "3.2.521"
   AWS_REGION: ${{ vars.AWS_REGION }}
 
 jobs:
@@ -63,7 +64,7 @@ jobs:
           docker run --rm \
             -v "$PWD":/tf \
             -w /tf \
-            ghcr.io/bridgecrewio/checkov:3.2.0-slim \
+            bridgecrew/checkov:${CHECKOV_VERSION} \
             checkov \
               --directory . \
               --framework terraform \
