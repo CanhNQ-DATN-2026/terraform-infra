@@ -1,0 +1,158 @@
+name: Terraform Infra
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-infra-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VERSION: "1.9.0"
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        run: terraform init -backend=false -input=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -recursive
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Checkov
+        run: |
+          mkdir -p reports
+          docker run --rm \
+            -v "$PWD":/tf \
+            -w /tf \
+            ghcr.io/bridgecrewio/checkov:3.2.0-slim \
+            checkov \
+              --directory . \
+              --framework terraform \
+              --output cli \
+              --output junitxml \
+              --output-file-path console,reports/checkov-report.xml \
+              --compact \
+              --skip-check CKV_AWS_7,CKV2_AWS_62
+
+      - name: Upload Checkov Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: checkov-report
+          path: reports/checkov-report.xml
+          if-no-files-found: ignore
+          retention-days: 7
+
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    needs:
+      - validate
+      - security
+    if: always()
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: github-actions-terraform-plan
+
+      - name: Terraform Init
+        run: terraform init -input=false -reconfigure
+
+      - name: Terraform Plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: tfplan
+          if-no-files-found: error
+          retention-days: 1
+
+  apply:
+    name: Apply
+    runs-on: ubuntu-latest
+    needs:
+      - plan
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: github-actions-terraform-apply
+
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: .
+
+      - name: Terraform Init
+        run: terraform init -input=false -reconfigure
+
+      - name: Terraform Apply
+        run: terraform apply -input=false tfplan

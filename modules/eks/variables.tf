@@ -41,6 +41,12 @@ variable "node_instance_types" {
   default     = ["t3.medium"]
 }
 
+variable "node_ami_type" {
+  description = "AMI family for the managed node group. For x86_64 node groups on EKS 1.29+, prefer AL2023."
+  type        = string
+  default     = "AL2023_x86_64_STANDARD"
+}
+
 variable "desired_size" {
   description = "Desired number of worker nodes."
   type        = number
@@ -58,4 +64,3 @@ variable "max_size" {
   type        = number
   default     = 4
 }
-

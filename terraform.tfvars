@@ -46,7 +46,7 @@ eks_cluster_name           = "bookgate-eks"
 eks_cluster_version        = "1.29"
 eks_endpoint_public_access = true
 eks_node_instance_types    = ["t3.small"]
-eks_desired_size           = 1
+eks_desired_size           = 2
 eks_min_size               = 1
 eks_max_size               = 2
 
