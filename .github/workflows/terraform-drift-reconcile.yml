@@ -1,0 +1,134 @@
+name: Terraform Drift Reconcile
+
+on:
+  # GitHub Actions schedules run in UTC.
+  # 00:00 Asia/Ho_Chi_Minh = 17:00 UTC on the previous day.
+  schedule:
+    - cron: "0 17 * * *"
+  workflow_dispatch:
+    inputs:
+      auto_remediate:
+        description: "Apply Terraform to converge AWS back to the code on main when drift is detected"
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: terraform-drift-reconcile-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VERSION: "1.9.0"
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+jobs:
+  detect-drift:
+    name: Detect Drift
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      drift_found: ${{ steps.detect.outputs.drift_found }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: github-actions-terraform-drift-detect
+
+      - name: Terraform Init
+        run: terraform init -input=false -reconfigure
+
+      - name: Detect Drift
+        id: detect
+        shell: bash
+        run: |
+          set +e
+          terraform plan -refresh-only -detailed-exitcode -out=drift-refresh.tfplan
+          exit_code=$?
+          set -e
+
+          case "$exit_code" in
+            0)
+              echo "drift_found=false" >> "$GITHUB_OUTPUT"
+              echo "No infrastructure drift detected." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            2)
+              echo "drift_found=true" >> "$GITHUB_OUTPUT"
+              echo "Infrastructure drift detected. A reconcile apply will run for scheduled executions, or when manual execution keeps auto_remediate=true." >> "$GITHUB_STEP_SUMMARY"
+              terraform show -no-color drift-refresh.tfplan > drift-refresh.txt
+              ;;
+            *)
+              echo "Terraform drift detection failed with exit code $exit_code." >> "$GITHUB_STEP_SUMMARY"
+              exit "$exit_code"
+              ;;
+          esac
+
+      - name: Upload Drift Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-refresh-report
+          path: drift-refresh.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+  reconcile:
+    name: Reconcile To Code
+    runs-on: ubuntu-latest
+    needs:
+      - detect-drift
+    if: github.ref == 'refs/heads/main' && needs.detect-drift.outputs.drift_found == 'true' && (github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.auto_remediate))
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-session-name: github-actions-terraform-drift-reconcile
+
+      - name: Terraform Init
+        run: terraform init -input=false -reconfigure
+
+      - name: Terraform Plan To Code
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Upload Reconcile Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-reconcile-plan
+          path: tfplan
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Terraform Apply
+        run: terraform apply -input=false -auto-approve tfplan
+
+      - name: Write Summary
+        run: echo "Terraform apply completed to converge live AWS resources back to the code on main." >> "$GITHUB_STEP_SUMMARY"
