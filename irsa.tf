@@ -110,6 +110,75 @@ resource "aws_iam_role_policy_attachment" "backend" {
 }
 
 # ─────────────────────────────────────────
+# IRSA — external-dns (Route 53 records automation)
+# SA: <external_dns_namespace>/<external_dns_service_account_name>
+# ─────────────────────────────────────────
+
+data "aws_iam_policy_document" "external_dns_assume_role" {
+  count = var.enable_external_dns_irsa && local.route53_zone_id_selected != null ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Federated"
+      identifiers = [module.eks.oidc_provider_arn]
+    }
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_issuer_host}:sub"
+      values = [
+        "system:serviceaccount:${var.external_dns_namespace}:${var.external_dns_service_account_name}"
+      ]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "external_dns_permissions" {
+  count = var.enable_external_dns_irsa && local.route53_zone_arn_selected != null ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "route53:ChangeResourceRecordSets",
+    ]
+    resources = [local.route53_zone_arn_selected]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "route53:GetChange",
+      "route53:ListHostedZones",
+      "route53:ListHostedZonesByName",
+      "route53:ListResourceRecordSets",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "external_dns" {
+  count = var.enable_external_dns_irsa && local.route53_zone_id_selected != null ? 1 : 0
+
+  name   = "${var.eks_cluster_name}-external-dns-policy"
+  policy = data.aws_iam_policy_document.external_dns_permissions[0].json
+}
+
+resource "aws_iam_role" "external_dns" {
+  count = var.enable_external_dns_irsa && local.route53_zone_id_selected != null ? 1 : 0
+
+  name               = "${var.eks_cluster_name}-external-dns-role"
+  assume_role_policy = data.aws_iam_policy_document.external_dns_assume_role[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "external_dns" {
+  count = var.enable_external_dns_irsa && local.route53_zone_id_selected != null ? 1 : 0
+
+  role       = aws_iam_role.external_dns[0].name
+  policy_arn = aws_iam_policy.external_dns[0].arn
+}
+
+# ─────────────────────────────────────────
 # Outputs — dùng trực tiếp trong helm install và pod YAML
 # ─────────────────────────────────────────
 
@@ -131,4 +200,9 @@ output "db_credentials_secret_arn" {
 output "app_secrets_secret_arn" {
   description = "ARN của secret app secrets — dùng trong app hoặc External Secrets"
   value       = aws_secretsmanager_secret.app_secrets.arn
+}
+
+output "external_dns_role_arn" {
+  description = "Annotate lên ServiceAccount của external-dns để controller tự tạo/cập nhật Route 53 records."
+  value       = try(aws_iam_role.external_dns[0].arn, null)
 }

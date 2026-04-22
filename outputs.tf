@@ -102,3 +102,22 @@ output "kubeconfig_command" {
   description = "Run this command to configure kubectl for the EKS cluster."
   value       = "aws eks update-kubeconfig --region ${var.aws_region} --name ${module.eks.cluster_name}"
 }
+
+# ─────────────────────────────────────────
+# Route 53
+# ─────────────────────────────────────────
+
+output "route53_zone_id" {
+  description = "Public Route 53 hosted zone ID selected by Terraform (created or looked up)."
+  value       = local.route53_zone_id_selected
+}
+
+output "route53_zone_name" {
+  description = "Public Route 53 hosted zone name selected by Terraform."
+  value       = local.route53_zone_name_selected
+}
+
+output "route53_name_servers" {
+  description = "Authoritative nameservers of the selected public Route 53 hosted zone."
+  value       = local.route53_name_servers_selected
+}

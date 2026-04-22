@@ -198,6 +198,52 @@ variable "eks_max_size" {
   default     = 4
 }
 
+# ─────────────────────────────────────────
+# Route 53 / DNS
+# ─────────────────────────────────────────
+
+variable "route53_create_hosted_zone" {
+  description = "Create and manage a public Route 53 hosted zone for the application domain."
+  type        = bool
+  default     = false
+}
+
+variable "route53_zone_name" {
+  description = "Public DNS zone name (for example: canhnq.online). Used when creating or looking up a hosted zone."
+  type        = string
+  default     = ""
+}
+
+variable "route53_zone_id" {
+  description = "Existing public Route 53 hosted zone ID to manage by reference instead of creating a new zone."
+  type        = string
+  default     = ""
+}
+
+variable "route53_force_destroy" {
+  description = "Allow Terraform to delete the Route 53 hosted zone even when records still exist."
+  type        = bool
+  default     = false
+}
+
+variable "enable_external_dns_irsa" {
+  description = "Create an IRSA role for the external-dns controller so it can manage Route 53 records."
+  type        = bool
+  default     = false
+}
+
+variable "external_dns_namespace" {
+  description = "Namespace of the external-dns Kubernetes service account."
+  type        = string
+  default     = "kube-system"
+}
+
+variable "external_dns_service_account_name" {
+  description = "Name of the external-dns Kubernetes service account."
+  type        = string
+  default     = "external-dns"
+}
+
 
 # ─────────────────────────────────────────
 # Tags

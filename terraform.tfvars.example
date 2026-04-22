@@ -60,6 +60,23 @@ eks_max_size               = 4
 eks_log_retention_days     = 7
 
 # ─────────────────────────────────────────
+# Route 53 / DNS
+# ─────────────────────────────────────────
+
+# Set one of:
+# - route53_create_hosted_zone = true and route53_zone_name = "canhnq.online"
+# - route53_zone_id = "Z1234567890ABC" to reuse an existing hosted zone
+route53_create_hosted_zone = false
+route53_zone_name          = "canhnq.online"
+route53_zone_id            = ""
+route53_force_destroy      = false
+
+# Create IRSA for external-dns so DNS records can be managed automatically.
+enable_external_dns_irsa       = true
+external_dns_namespace         = "kube-system"
+external_dns_service_account_name = "external-dns"
+
+# ─────────────────────────────────────────
 # Tags
 # ─────────────────────────────────────────
 
