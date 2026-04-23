@@ -160,7 +160,7 @@ variable "eks_cluster_name" {
 variable "eks_cluster_version" {
   description = "Kubernetes version for the EKS cluster."
   type        = string
-  default     = "1.29"
+  default     = "1.34"
 
   validation {
     condition     = can(regex("^1\\.[0-9]+$", var.eks_cluster_version))
@@ -242,6 +242,24 @@ variable "external_dns_service_account_name" {
   description = "Name of the external-dns Kubernetes service account."
   type        = string
   default     = "external-dns"
+}
+
+variable "enable_external_secrets_irsa" {
+  description = "Create an IRSA role for the external-secrets controller so it can read from AWS Secrets Manager."
+  type        = bool
+  default     = false
+}
+
+variable "external_secrets_namespace" {
+  description = "Namespace of the external-secrets Kubernetes service account."
+  type        = string
+  default     = "external-secrets"
+}
+
+variable "external_secrets_service_account_name" {
+  description = "Name of the external-secrets Kubernetes service account."
+  type        = string
+  default     = "external-secrets"
 }
 
 

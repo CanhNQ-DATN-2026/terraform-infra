@@ -9,8 +9,8 @@ resource "aws_db_instance" "this" {
   identifier        = "${var.project_name}-${var.environment}-postgres"
   engine            = "postgres"
   engine_version    = "17"
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
+  instance_class    = var.db_instance_class
+  allocated_storage = var.db_allocated_storage
   storage_type      = "gp2"
 
   db_name                     = var.db_name
@@ -24,7 +24,7 @@ resource "aws_db_instance" "this" {
   multi_az                = false
   skip_final_snapshot     = true
   backup_retention_period = 0
-  deletion_protection     = false
+  deletion_protection     = var.db_deletion_protection
 
   tags = { Name = "${var.project_name}-${var.environment}-postgres" }
 }

@@ -14,6 +14,8 @@ This repo currently provisions:
 - IRSA roles for:
   - AWS Load Balancer Controller
   - backend pod
+  - external-dns
+  - external-secrets
 - AWS Secrets Manager application secret shell
 
 ## Repo layout
@@ -87,6 +89,24 @@ Expected keys to populate manually:
   - `s3:DeleteObject`
   - `s3:ListBucket`
 
+### external-dns
+- output: `external_dns_role_arn`
+- intended ServiceAccount: `${external_dns_namespace}/${external_dns_service_account_name}`
+- permissions:
+  - `route53:ChangeResourceRecordSets`
+  - `route53:GetChange`
+  - `route53:ListHostedZones`
+  - `route53:ListHostedZonesByName`
+  - `route53:ListResourceRecordSets`
+
+### external-secrets
+- output: `external_secrets_role_arn`
+- intended ServiceAccount: `${external_secrets_namespace}/${external_secrets_service_account_name}`
+- permissions:
+  - `secretsmanager:DescribeSecret`
+  - `secretsmanager:GetSecretValue`
+  - `secretsmanager:ListSecretVersionIds`
+
 ### AWS Load Balancer Controller
 - output: `lbc_role_arn`
 - intended ServiceAccount: `kube-system/aws-load-balancer-controller`
@@ -107,6 +127,8 @@ Expected keys to populate manually:
 | `eks_cluster_oidc_issuer` | IRSA trust setup |
 | `eks_oidc_provider_arn` | IRSA trust setup |
 | `backend_role_arn` | Passed into Helm value `apiService.serviceAccount.roleArn` |
+| `external_dns_role_arn` | Passed into Helm value `externalDns.serviceAccount.roleArn` |
+| `external_secrets_role_arn` | Annotate the external-secrets controller ServiceAccount |
 | `lbc_role_arn` | Used for AWS LBC install |
 | `db_credentials_secret_arn` | Read RDS password from Secrets Manager |
 | `app_secrets_secret_arn` | ARN of app secret shell |

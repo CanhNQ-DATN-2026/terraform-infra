@@ -7,13 +7,9 @@ locals {
 # SA: kube-system/aws-load-balancer-controller
 # ─────────────────────────────────────────
 
-data "http" "lbc_iam_policy" {
-  url = "https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json"
-}
-
 resource "aws_iam_policy" "lbc" {
   name   = "${var.eks_cluster_name}-lbc-policy"
-  policy = data.http.lbc_iam_policy.response_body
+  policy = file("${path.module}/lbc-policy.json")
 }
 
 data "aws_iam_policy_document" "lbc_assume_role" {
@@ -55,7 +51,7 @@ resource "aws_secretsmanager_secret" "app_secrets" {
 }
 
 # ─────────────────────────────────────────
-# IRSA — Backend pod (S3 + Secrets Manager)
+# IRSA — Backend pod (S3 access for uploaded book files)
 # SA: bookgate/backend-sa
 # ─────────────────────────────────────────
 
@@ -202,7 +198,75 @@ output "app_secrets_secret_arn" {
   value       = aws_secretsmanager_secret.app_secrets.arn
 }
 
+# ─────────────────────────────────────────
+# IRSA — external-secrets (Secrets Manager sync)
+# SA: <external_secrets_namespace>/<external_secrets_service_account_name>
+# ─────────────────────────────────────────
+
+data "aws_iam_policy_document" "external_secrets_assume_role" {
+  count = var.enable_external_secrets_irsa ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Federated"
+      identifiers = [module.eks.oidc_provider_arn]
+    }
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_issuer_host}:sub"
+      values = [
+        "system:serviceaccount:${var.external_secrets_namespace}:${var.external_secrets_service_account_name}"
+      ]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "external_secrets_permissions" {
+  count = var.enable_external_secrets_irsa ? 1 : 0
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:ListSecretVersionIds",
+    ]
+    resources = [
+      aws_secretsmanager_secret.app_secrets.arn,
+      module.rds.master_user_secret_arn,
+    ]
+  }
+}
+
+resource "aws_iam_policy" "external_secrets" {
+  count = var.enable_external_secrets_irsa ? 1 : 0
+
+  name   = "${var.eks_cluster_name}-external-secrets-policy"
+  policy = data.aws_iam_policy_document.external_secrets_permissions[0].json
+}
+
+resource "aws_iam_role" "external_secrets" {
+  count = var.enable_external_secrets_irsa ? 1 : 0
+
+  name               = "${var.eks_cluster_name}-external-secrets-role"
+  assume_role_policy = data.aws_iam_policy_document.external_secrets_assume_role[0].json
+}
+
+resource "aws_iam_role_policy_attachment" "external_secrets" {
+  count = var.enable_external_secrets_irsa ? 1 : 0
+
+  role       = aws_iam_role.external_secrets[0].name
+  policy_arn = aws_iam_policy.external_secrets[0].arn
+}
+
 output "external_dns_role_arn" {
   description = "Annotate lên ServiceAccount của external-dns để controller tự tạo/cập nhật Route 53 records."
   value       = try(aws_iam_role.external_dns[0].arn, null)
+}
+
+output "external_secrets_role_arn" {
+  description = "Annotate lên ServiceAccount của external-secrets để controller có thể đọc Secrets Manager."
+  value       = try(aws_iam_role.external_secrets[0].arn, null)
 }

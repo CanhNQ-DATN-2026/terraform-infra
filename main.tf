@@ -48,12 +48,15 @@ module "security_groups" {
 module "rds" {
   source = "./modules/rds"
 
-  project_name          = var.project_name
-  environment           = var.environment
-  private_db_subnet_ids = module.vpc.private_db_subnet_ids
-  rds_security_group_id = module.security_groups.rds_sg_id
-  db_name               = var.db_name
-  db_username           = var.db_username
+  project_name           = var.project_name
+  environment            = var.environment
+  private_db_subnet_ids  = module.vpc.private_db_subnet_ids
+  rds_security_group_id  = module.security_groups.rds_sg_id
+  db_name                = var.db_name
+  db_username            = var.db_username
+  db_instance_class      = var.db_instance_class
+  db_allocated_storage   = var.db_allocated_storage
+  db_deletion_protection = var.db_deletion_protection
 }
 
 # ─────────────────────────────────────────

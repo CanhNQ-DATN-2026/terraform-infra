@@ -43,12 +43,27 @@ ecr_force_delete = false
 # ─────────────────────────────────────────
 
 eks_cluster_name           = "bookgate-eks"
-eks_cluster_version        = "1.29"
+eks_cluster_version        = "1.34"
 eks_endpoint_public_access = true
 eks_node_instance_types    = ["t3.small"]
-eks_desired_size           = 2
+eks_desired_size           = 4
 eks_min_size               = 1
-eks_max_size               = 2
+eks_max_size               = 4
+
+# ─────────────────────────────────────────
+# Route 53 / DNS
+# ─────────────────────────────────────────
+
+route53_create_hosted_zone            = false
+route53_zone_name                     = "canhnq.online"
+route53_zone_id                       = "Z095756518VW7CY38XNOY"
+route53_force_destroy                 = false
+enable_external_dns_irsa              = true
+external_dns_namespace                = "bookgate"
+external_dns_service_account_name     = "external-dns"
+enable_external_secrets_irsa          = true
+external_secrets_namespace            = "external-secrets"
+external_secrets_service_account_name = "external-secrets"
 
 # ─────────────────────────────────────────
 # Tags
