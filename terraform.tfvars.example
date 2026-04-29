@@ -73,6 +73,13 @@ external_secrets_namespace            = "external-secrets"
 external_secrets_service_account_name = "external-secrets"
 
 # ─────────────────────────────────────────
+# ArgoCD
+# ─────────────────────────────────────────
+
+argocd_chart_version = "7.7.5"
+helm_repo_url        = "https://github.com/CanhNQ-DATN-2026/helm-repo.git"
+
+# ─────────────────────────────────────────
 # Tags
 # ─────────────────────────────────────────
 

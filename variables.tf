@@ -264,6 +264,28 @@ variable "external_secrets_service_account_name" {
 
 
 # ─────────────────────────────────────────
+# ArgoCD
+# ─────────────────────────────────────────
+
+variable "argocd_namespace" {
+  description = "Kubernetes namespace to install ArgoCD into."
+  type        = string
+  default     = "argocd"
+}
+
+variable "argocd_chart_version" {
+  description = "Version of the argo-cd Helm chart to install."
+  type        = string
+  default     = "7.7.5"
+}
+
+variable "helm_repo_url" {
+  description = "GitHub URL of the helm-repo that ArgoCD syncs from."
+  type        = string
+  default     = "https://github.com/CanhNQ-DATN-2026/helm-repo.git"
+}
+
+# ─────────────────────────────────────────
 # Tags
 # ─────────────────────────────────────────
 
