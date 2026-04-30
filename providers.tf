@@ -8,14 +8,17 @@ provider "aws" {
 
 # ─────────────────────────────────────────
 # EKS cluster data — consumed by helm + kubectl providers below.
-# Terraform reads this after module.eks is created (implicit dep via
-# module.eks.cluster_name). On a brand-new state, run:
-#   terraform apply -target=module.eks
-#   terraform apply
+#
+# Uses var.eks_cluster_name (always a known concrete value) so Terraform
+# never has an unknown name during plan. depends_on = [module.eks] defers
+# the actual AWS read to apply time, after the cluster exists.
+# This means ArgoCD resources are planned as "deferred" on a fresh state
+# and created in the same apply run once EKS is ready.
 # ─────────────────────────────────────────
 
 data "aws_eks_cluster" "this" {
-  name = module.eks.cluster_name
+  name       = var.eks_cluster_name
+  depends_on = [module.eks]
 }
 
 # ─────────────────────────────────────────
