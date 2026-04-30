@@ -285,6 +285,12 @@ variable "helm_repo_url" {
   default     = "https://github.com/CanhNQ-DATN-2026/helm-repo.git"
 }
 
+variable "argocd_hostname" {
+  description = "Public hostname for the ArgoCD UI (e.g. argocd.canhnq.online)."
+  type        = string
+  default     = "argocd.canhnq.online"
+}
+
 # ─────────────────────────────────────────
 # Tags
 # ─────────────────────────────────────────

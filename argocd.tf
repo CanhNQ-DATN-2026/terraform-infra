@@ -31,6 +31,20 @@ resource "helm_release" "argocd" {
           "server.insecure" = "true"
         }
       }
+      server = {
+        ingress = {
+          enabled = true
+          annotations = {
+            "kubernetes.io/ingress.class"                         = "alb"
+            "alb.ingress.kubernetes.io/scheme"                   = "internet-facing"
+            "alb.ingress.kubernetes.io/target-type"              = "ip"
+            "alb.ingress.kubernetes.io/group.name"               = "bookgate"
+            "alb.ingress.kubernetes.io/listen-ports"             = "[{\"HTTP\": 80}]"
+            "external-dns.alpha.kubernetes.io/hostname"          = var.argocd_hostname
+          }
+          hosts = [var.argocd_hostname]
+        }
+      }
     })
   ]
 }
