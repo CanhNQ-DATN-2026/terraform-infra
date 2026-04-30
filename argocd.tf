@@ -3,7 +3,7 @@
 #
 # Pre-requisite (one-time, before terraform apply):
 #   aws secretsmanager create-secret \
-#     --name bookgate/dev/argocd-github-pat \
+#     --name bookgate/dev/argocd \
 #     --secret-string "github_pat_xxxx"
 #
 # The PAT needs: Contents = Read-only on CanhNQ-DATN-2026/helm-repo.
@@ -41,7 +41,7 @@ resource "helm_release" "argocd" {
 # ─────────────────────────────────────────
 
 data "aws_secretsmanager_secret_version" "github_pat" {
-  secret_id = "${var.project_name}/${var.environment}/argocd-github-pat"
+  secret_id = "${var.project_name}/${var.environment}/argocd"
 }
 
 # ─────────────────────────────────────────
