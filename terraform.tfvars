@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────
 
 aws_region   = "us-east-1"
-aws_profile  = ""         # overridden locally via terraform.local.auto.tfvars (gitignored)
+aws_profile  = "" # overridden locally via terraform.local.auto.tfvars (gitignored)
 project_name = "bookgate"
 environment  = "dev"
 
