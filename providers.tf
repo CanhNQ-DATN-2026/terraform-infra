@@ -25,6 +25,15 @@ data "aws_eks_cluster" "this" {
 # Helm provider — used to install ArgoCD
 # ─────────────────────────────────────────
 
+locals {
+  # Build the base args list, then append --profile only when aws_profile is set.
+  # This lets local runs use a named profile while CI uses the instance/pod role.
+  eks_token_args = concat(
+    ["eks", "get-token", "--cluster-name", var.eks_cluster_name, "--region", var.aws_region],
+    var.aws_profile != "" ? ["--profile", var.aws_profile] : []
+  )
+}
+
 provider "helm" {
   kubernetes {
     host                   = data.aws_eks_cluster.this.endpoint
@@ -32,7 +41,7 @@ provider "helm" {
     exec {
       api_version = "client.authentication.k8s.io/v1beta1"
       command     = "aws"
-      args        = ["eks", "get-token", "--cluster-name", var.eks_cluster_name, "--region", var.aws_region]
+      args        = local.eks_token_args
     }
   }
 }
@@ -48,6 +57,6 @@ provider "kubectl" {
   exec {
     api_version = "client.authentication.k8s.io/v1beta1"
     command     = "aws"
-    args        = ["eks", "get-token", "--cluster-name", var.eks_cluster_name, "--region", var.aws_region]
+    args        = local.eks_token_args
   }
 }

@@ -8,6 +8,12 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+variable "aws_profile" {
+  description = "AWS CLI profile for EKS token generation by the Helm/kubectl providers. Leave empty in CI (instance role is used instead)."
+  type        = string
+  default     = ""
+}
+
 variable "project_name" {
   description = "Project name used in resource naming and tagging."
   type        = string
@@ -262,6 +268,27 @@ variable "external_secrets_service_account_name" {
   default     = "external-secrets"
 }
 
+# ─────────────────────────────────────────
+# AIOps Bot (Bedrock)
+# ─────────────────────────────────────────
+
+variable "enable_aiops_irsa" {
+  description = "Create an IRSA role for the AIOps bot so it can call Bedrock, read RDS events, and read CloudWatch metrics."
+  type        = bool
+  default     = false
+}
+
+variable "aiops_namespace" {
+  description = "Namespace of the AIOps bot Kubernetes service account."
+  type        = string
+  default     = "bookgate"
+}
+
+variable "aiops_service_account_name" {
+  description = "Name of the AIOps bot Kubernetes service account."
+  type        = string
+  default     = "aiops-bot"
+}
 
 # ─────────────────────────────────────────
 # ArgoCD

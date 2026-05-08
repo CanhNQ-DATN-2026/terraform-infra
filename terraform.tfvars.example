@@ -3,6 +3,7 @@
 # ─────────────────────────────────────────
 
 aws_region   = "us-east-1"
+aws_profile  = ""         # set to your AWS CLI profile for local runs; leave empty in CI
 project_name = "bookgate"
 environment  = "dev"
 

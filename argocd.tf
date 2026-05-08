@@ -25,6 +25,10 @@ resource "helm_release" "argocd" {
 
   values = [
     yamlencode({
+      global = {
+        # Controls spec.rules[0].host in the ingress (chart v7+ uses global.domain).
+        domain = var.argocd_hostname
+      }
       configs = {
         params = {
           # TLS is terminated at the ALB; ArgoCD server runs in plain HTTP.
@@ -42,7 +46,6 @@ resource "helm_release" "argocd" {
             "alb.ingress.kubernetes.io/listen-ports"    = "[{\"HTTP\": 80}]"
             "external-dns.alpha.kubernetes.io/hostname" = var.argocd_hostname
           }
-          hosts = [var.argocd_hostname]
         }
       }
     })

@@ -3,6 +3,7 @@
 # ─────────────────────────────────────────
 
 aws_region   = "us-east-1"
+aws_profile  = ""         # overridden locally via terraform.local.auto.tfvars (gitignored)
 project_name = "bookgate"
 environment  = "dev"
 
@@ -64,6 +65,9 @@ external_dns_service_account_name     = "external-dns"
 enable_external_secrets_irsa          = true
 external_secrets_namespace            = "external-secrets"
 external_secrets_service_account_name = "external-secrets"
+enable_aiops_irsa                     = true
+aiops_namespace                       = "bookgate"
+aiops_service_account_name            = "aiops-bot"
 
 # ─────────────────────────────────────────
 # ArgoCD

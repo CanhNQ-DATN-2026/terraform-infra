@@ -270,3 +270,66 @@ output "external_secrets_role_arn" {
   description = "Annotate lên ServiceAccount của external-secrets để controller có thể đọc Secrets Manager."
   value       = try(aws_iam_role.external_secrets[0].arn, null)
 }
+
+# ─────────────────────────────────────────
+# IRSA — AIOps Bot (RDS + CloudWatch read-only)
+# SA: bookgate/aiops-bot
+# ─────────────────────────────────────────
+
+data "aws_iam_policy_document" "aiops_bot_assume_role" {
+  statement {
+    effect = "Allow"
+    principals {
+      type        = "Federated"
+      identifiers = [module.eks.oidc_provider_arn]
+    }
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+    condition {
+      test     = "StringEquals"
+      variable = "${local.oidc_issuer_host}:sub"
+      values   = ["system:serviceaccount:bookgate:aiops-bot"]
+    }
+  }
+}
+
+data "aws_iam_policy_document" "aiops_bot_permissions" {
+  statement {
+    sid    = "RDSReadOnly"
+    effect = "Allow"
+    actions = [
+      "rds:DescribeDBInstances",
+      "rds:DescribeEvents"
+    ]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "CloudWatchReadOnly"
+    effect = "Allow"
+    actions = [
+      "cloudwatch:GetMetricStatistics",
+      "cloudwatch:ListMetrics"
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "aiops_bot" {
+  name   = "${var.eks_cluster_name}-aiops-bot-policy"
+  policy = data.aws_iam_policy_document.aiops_bot_permissions.json
+}
+
+resource "aws_iam_role" "aiops_bot" {
+  name               = "${var.eks_cluster_name}-aiops-bot-role"
+  assume_role_policy = data.aws_iam_policy_document.aiops_bot_assume_role.json
+}
+
+resource "aws_iam_role_policy_attachment" "aiops_bot" {
+  role       = aws_iam_role.aiops_bot.name
+  policy_arn = aws_iam_policy.aiops_bot.arn
+}
+
+output "aiops_bot_role_arn" {
+  description = "Annotate lên ServiceAccount của aiops-bot để pod có thể query RDS và CloudWatch."
+  value       = aws_iam_role.aiops_bot.arn
+}
