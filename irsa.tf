@@ -312,6 +312,12 @@ data "aws_iam_policy_document" "aiops_bot_permissions" {
     ]
     resources = ["*"]
   }
+
+  statement {
+    effect    = "Allow"
+    actions   = ["sts:AssumeRole"]
+    resources = ["arn:aws:iam::400071840696:role/bot-assume-role"]
+  }
 }
 
 resource "aws_iam_policy" "aiops_bot" {
