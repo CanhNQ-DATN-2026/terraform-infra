@@ -1,5 +1,6 @@
 provider "aws" {
-  region = var.aws_region
+  region  = var.aws_region
+  profile = var.aws_profile != "" ? var.aws_profile : null
 
   default_tags {
     tags = var.common_tags
@@ -9,40 +10,29 @@ provider "aws" {
 # ─────────────────────────────────────────
 # EKS cluster data — consumed by helm + kubectl providers below.
 #
-# Uses var.eks_cluster_name (always a known concrete value) so Terraform
-# never has an unknown name during plan. depends_on = [module.eks] defers
-# the actual AWS read to apply time, after the cluster exists.
-# This means ArgoCD resources are planned as "deferred" on a fresh state
-# and created in the same apply run once EKS is ready.
+# Uses var.eks_cluster_name (always a known concrete value), so Terraform can
+# read the existing cluster during plan and configure Helm/kubectl providers
+# without relying on local kubeconfig.
 # ─────────────────────────────────────────
 
 data "aws_eks_cluster" "this" {
-  name       = var.eks_cluster_name
-  depends_on = [module.eks]
+  name = var.eks_cluster_name
+}
+
+data "aws_eks_cluster_auth" "this" {
+  name = var.eks_cluster_name
 }
 
 # ─────────────────────────────────────────
-# Helm provider — used to install ArgoCD
+# Helm provider — used to install ArgoCD.
+# Uses AWS provider credentials directly, so CI does not need kubeconfig.
 # ─────────────────────────────────────────
-
-locals {
-  # Build the base args list, then append --profile only when aws_profile is set.
-  # This lets local runs use a named profile while CI uses the instance/pod role.
-  eks_token_args = concat(
-    ["eks", "get-token", "--cluster-name", var.eks_cluster_name, "--region", var.aws_region],
-    var.aws_profile != "" ? ["--profile", var.aws_profile] : []
-  )
-}
 
 provider "helm" {
   kubernetes {
     host                   = data.aws_eks_cluster.this.endpoint
     cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
-    exec {
-      api_version = "client.authentication.k8s.io/v1beta1"
-      command     = "aws"
-      args        = local.eks_token_args
-    }
+    token                  = data.aws_eks_cluster_auth.this.token
   }
 }
 
@@ -53,10 +43,6 @@ provider "helm" {
 provider "kubectl" {
   host                   = data.aws_eks_cluster.this.endpoint
   cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.this.token
   load_config_file       = false
-  exec {
-    api_version = "client.authentication.k8s.io/v1beta1"
-    command     = "aws"
-    args        = local.eks_token_args
-  }
 }
