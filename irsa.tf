@@ -50,10 +50,8 @@ resource "aws_secretsmanager_secret" "app_secrets" {
   recovery_window_in_days = 0
 }
 
-resource "aws_secretsmanager_secret" "aiops_bot_secrets" {
-  name                    = "${var.project_name}/${var.environment}/aiops-bot-secrets"
-  description             = "AIOps bot secrets (Telegram bot token and chat ID)"
-  recovery_window_in_days = 0
+data "aws_secretsmanager_secret" "aiops_bot_secrets" {
+  name = "${var.project_name}/${var.environment}/aiops-bot-secrets"
 }
 
 # ─────────────────────────────────────────
@@ -241,7 +239,7 @@ data "aws_iam_policy_document" "external_secrets_permissions" {
     ]
     resources = [
       aws_secretsmanager_secret.app_secrets.arn,
-      aws_secretsmanager_secret.aiops_bot_secrets.arn,
+      data.aws_secretsmanager_secret.aiops_bot_secrets.arn,
       module.rds.master_user_secret_arn,
     ]
   }
