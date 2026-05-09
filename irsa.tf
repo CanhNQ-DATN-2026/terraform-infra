@@ -277,7 +277,7 @@ output "external_secrets_role_arn" {
 }
 
 # ─────────────────────────────────────────
-# IRSA — AIOps Bot (RDS + CloudWatch read-only)
+# IRSA — AIOps Bot (AWS admin)
 # SA: bookgate/aiops-bot
 # ─────────────────────────────────────────
 
@@ -343,7 +343,12 @@ resource "aws_iam_role_policy_attachment" "aiops_bot" {
   policy_arn = aws_iam_policy.aiops_bot.arn
 }
 
+resource "aws_iam_role_policy_attachment" "aiops_bot_admin" {
+  role       = aws_iam_role.aiops_bot.name
+  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+}
+
 output "aiops_bot_role_arn" {
-  description = "Annotate lên ServiceAccount của aiops-bot để pod có thể query RDS và CloudWatch."
+  description = "Annotate lên ServiceAccount của aiops-bot để pod có quyền admin qua IRSA."
   value       = aws_iam_role.aiops_bot.arn
 }
