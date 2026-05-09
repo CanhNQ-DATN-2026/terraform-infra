@@ -17,3 +17,8 @@ output "frontend_repository_url" {
   description = "Full URI of the ECR repository for the frontend image."
   value       = aws_ecr_repository.frontend.repository_url
 }
+
+output "aiops_bot_repository_url" {
+  description = "Full URI of the ECR repository for the aiops-bot image."
+  value       = aws_ecr_repository.aiops_bot.repository_url
+}

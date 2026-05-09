@@ -27,3 +27,12 @@ resource "aws_ecr_repository" "frontend" {
     Name = "${var.project_name}/frontend"
   }
 }
+
+resource "aws_ecr_repository" "aiops_bot" {
+  name         = "${var.project_name}/aiops-bot"
+  force_delete = var.force_delete
+
+  tags = {
+    Name = "${var.project_name}/aiops-bot"
+  }
+}

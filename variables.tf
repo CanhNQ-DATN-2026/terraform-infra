@@ -290,6 +290,12 @@ variable "aiops_service_account_name" {
   default     = "aiops-bot"
 }
 
+variable "bedrock_role_arn" {
+  description = "ARN of the IAM role in Account B that the AIOps bot assumes to call Amazon Bedrock."
+  type        = string
+  default     = ""
+}
+
 # ─────────────────────────────────────────
 # ArgoCD
 # ─────────────────────────────────────────
