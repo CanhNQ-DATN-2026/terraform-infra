@@ -37,7 +37,7 @@ s3_bucket_suffix = "392423995152"
 # ECR
 # ─────────────────────────────────────────
 
-ecr_force_delete = false
+ecr_force_delete = true
 
 # ─────────────────────────────────────────
 # EKS
