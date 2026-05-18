@@ -74,9 +74,10 @@ bedrock_role_arn                      = "arn:aws:iam::400071840696:role/bot-assu
 # ArgoCD
 # ─────────────────────────────────────────
 
-argocd_chart_version = "7.7.5"
-helm_repo_url        = "https://github.com/CanhNQ-DATN-2026/helm-repo.git"
-argocd_hostname      = "argocd.canhnq.online"
+enable_argocd_bootstrap = false
+argocd_chart_version    = "7.7.5"
+helm_repo_url           = "https://github.com/CanhNQ-DATN-2026/helm-repo.git"
+argocd_hostname         = "argocd.canhnq.online"
 
 # ─────────────────────────────────────────
 # Tags

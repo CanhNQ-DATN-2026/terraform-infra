@@ -16,10 +16,14 @@ provider "aws" {
 # ─────────────────────────────────────────
 
 data "aws_eks_cluster" "this" {
+  count = var.enable_argocd_bootstrap ? 1 : 0
+
   name = var.eks_cluster_name
 }
 
 data "aws_eks_cluster_auth" "this" {
+  count = var.enable_argocd_bootstrap ? 1 : 0
+
   name = var.eks_cluster_name
 }
 
@@ -30,9 +34,9 @@ data "aws_eks_cluster_auth" "this" {
 
 provider "helm" {
   kubernetes {
-    host                   = data.aws_eks_cluster.this.endpoint
-    cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
-    token                  = data.aws_eks_cluster_auth.this.token
+    host                   = var.enable_argocd_bootstrap ? data.aws_eks_cluster.this[0].endpoint : null
+    cluster_ca_certificate = var.enable_argocd_bootstrap ? base64decode(data.aws_eks_cluster.this[0].certificate_authority[0].data) : null
+    token                  = var.enable_argocd_bootstrap ? data.aws_eks_cluster_auth.this[0].token : null
   }
 }
 
@@ -41,8 +45,8 @@ provider "helm" {
 # ─────────────────────────────────────────
 
 provider "kubectl" {
-  host                   = data.aws_eks_cluster.this.endpoint
-  cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
-  token                  = data.aws_eks_cluster_auth.this.token
+  host                   = var.enable_argocd_bootstrap ? data.aws_eks_cluster.this[0].endpoint : null
+  cluster_ca_certificate = var.enable_argocd_bootstrap ? base64decode(data.aws_eks_cluster.this[0].certificate_authority[0].data) : null
+  token                  = var.enable_argocd_bootstrap ? data.aws_eks_cluster_auth.this[0].token : null
   load_config_file       = false
 }

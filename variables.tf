@@ -300,6 +300,12 @@ variable "bedrock_role_arn" {
 # ArgoCD
 # ─────────────────────────────────────────
 
+variable "enable_argocd_bootstrap" {
+  description = "Install ArgoCD and apply the root Application. Enable only after the EKS cluster already exists."
+  type        = bool
+  default     = false
+}
+
 variable "argocd_namespace" {
   description = "Kubernetes namespace to install ArgoCD into."
   type        = string

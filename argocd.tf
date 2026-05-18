@@ -14,6 +14,8 @@
 # ─────────────────────────────────────────
 
 resource "helm_release" "argocd" {
+  count = var.enable_argocd_bootstrap ? 1 : 0
+
   name             = "argocd"
   repository       = "https://argoproj.github.io/argo-helm"
   chart            = "argo-cd"
@@ -58,6 +60,8 @@ resource "helm_release" "argocd" {
 # ─────────────────────────────────────────
 
 data "aws_secretsmanager_secret_version" "github_pat" {
+  count = var.enable_argocd_bootstrap ? 1 : 0
+
   secret_id = "${var.project_name}/${var.environment}/argocd"
 }
 
@@ -67,6 +71,8 @@ data "aws_secretsmanager_secret_version" "github_pat" {
 # ─────────────────────────────────────────
 
 resource "kubectl_manifest" "argocd_repo_secret" {
+  count = var.enable_argocd_bootstrap ? 1 : 0
+
   yaml_body = <<-YAML
     apiVersion: v1
     kind: Secret
@@ -79,7 +85,7 @@ resource "kubectl_manifest" "argocd_repo_secret" {
       type: git
       url: ${var.helm_repo_url}
       username: x-token
-      password: ${data.aws_secretsmanager_secret_version.github_pat.secret_string}
+      password: ${data.aws_secretsmanager_secret_version.github_pat[0].secret_string}
   YAML
 
   depends_on = [helm_release.argocd]
@@ -92,6 +98,8 @@ resource "kubectl_manifest" "argocd_repo_secret" {
 # ─────────────────────────────────────────
 
 resource "kubectl_manifest" "argocd_root_app" {
+  count = var.enable_argocd_bootstrap ? 1 : 0
+
   yaml_body = <<-YAML
     apiVersion: argoproj.io/v1alpha1
     kind: Application
