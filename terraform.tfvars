@@ -47,9 +47,9 @@ eks_cluster_name           = "bookgate-eks"
 eks_cluster_version        = "1.34"
 eks_endpoint_public_access = true
 eks_node_instance_types    = ["t3.small"]
-eks_desired_size           = 6
+eks_desired_size           = 5
 eks_min_size               = 1
-eks_max_size               = 6
+eks_max_size               = 5
 
 # ─────────────────────────────────────────
 # Route 53 / DNS
