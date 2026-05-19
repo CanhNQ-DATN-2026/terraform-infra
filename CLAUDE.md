@@ -3,7 +3,7 @@
 ## Repo overview
 Repo này quản lý AWS foundation cho Bookgate:
 - VPC + subnets + routing
-- Security groups
+- Security groups 
 - EKS + OIDC provider
 - RDS PostgreSQL
 - S3 bucket cho book files
