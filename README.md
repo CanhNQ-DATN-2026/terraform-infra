@@ -16,6 +16,8 @@ This repo currently provisions:
   - backend pod
   - external-dns
   - external-secrets
+  - AIOps bot
+- optional ArgoCD bootstrap and root app
 - AWS Secrets Manager application secret shell
 
 ## Repo layout
@@ -40,7 +42,7 @@ terraform/
 
 ## What this repo does not do
 
-- does not deploy application manifests
+- does not deploy BookGate application workloads directly
 - does not populate runtime secret values automatically
 - does not create application data inside PostgreSQL
 
@@ -65,6 +67,9 @@ Repositories exposed by current outputs:
 - `chat-service`
 - `frontend`
 
+The ECR module also creates:
+- `aiops-bot`
+
 ### Secrets Manager
 Terraform creates a shell secret:
 - `${project_name}/${environment}/app-secrets`
@@ -77,6 +82,10 @@ Expected keys to populate manually:
 - `SECRET_KEY`
 - `ADMIN_PASSWORD`
 - `OPENAI_API_KEY`
+
+Terraform also reads these existing operator-managed secrets when the related features are enabled:
+- `bookgate/dev/aiops-bot-secrets`
+- `bookgate/dev/argocd`
 
 ## IRSA roles
 
@@ -111,11 +120,20 @@ Expected keys to populate manually:
 - output: `lbc_role_arn`
 - intended ServiceAccount: `kube-system/aws-load-balancer-controller`
 
+### AIOps bot
+- output: `aiops_bot_role_arn`
+- intended ServiceAccount: `bookgate/aiops-bot`
+- permissions:
+  - RDS read-only metadata/events
+  - CloudWatch metrics read
+  - `sts:AssumeRole` to the configured Bedrock role
+  - `AdministratorAccess` is currently attached for lab/demo operations
+
 ## Important outputs
 
 | Output | Purpose |
 |---|---|
-| `ecr_registry_url` | Set as `ECR_REGISTRY` in app/helm CI |
+| `ecr_registry_url` | Set as `ECR_REGISTRY` in GitHub Actions |
 | `ecr_api_service_repository_url` | Full api-service repo URL |
 | `ecr_chat_service_repository_url` | Full chat-service repo URL |
 | `ecr_frontend_repository_url` | Full frontend repo URL |
@@ -132,6 +150,7 @@ Expected keys to populate manually:
 | `lbc_role_arn` | Used for AWS LBC install |
 | `db_credentials_secret_arn` | Read RDS password from Secrets Manager |
 | `app_secrets_secret_arn` | ARN of app secret shell |
+| `aiops_bot_role_arn` | Annotate the AIOps bot ServiceAccount |
 
 ## Secrets setup
 
@@ -174,22 +193,21 @@ Configuration lives in committed `terraform.tfvars`.
 
 ## CI/CD
 
-Pipeline file: `.gitlab-ci.yml`
+Workflow files live in `.github/workflows/`.
 
-Stages:
-- `test`
-  - `validate`
-  - `security`
-- `plan`
-- `apply`
+Main workflow:
+- validates Terraform
+- checks formatting
+- runs Checkov with soft-fail
+- plans with the remote S3 backend
+- applies on `main` push or manual dispatch through the `production` environment
 
-Behavior:
-- GitLab OIDC -> `AssumeRoleWithWebIdentity`
-- `validate` runs with `-backend=false`
-- `plan` and `apply` use AWS credentials
-- `apply` is manual on default branch
+Operational workflows:
+- `terraform-reconcile.yml`: manually apply drift back to code on `main`
+- `terraform-drift-reconcile.yml`: scheduled/manual drift detection
+- `eks-grant-admin.yml`: controlled `aws-auth` admin grant helper
 
-Required GitLab CI variables:
+Required GitHub repository variables:
 - `AWS_ROLE_ARN`
 - `AWS_REGION`
 
