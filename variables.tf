@@ -269,26 +269,8 @@ variable "external_secrets_service_account_name" {
 }
 
 # ─────────────────────────────────────────
-# AIOps Bot (Bedrock)
+# AIOps Bot
 # ─────────────────────────────────────────
-
-variable "enable_aiops_irsa" {
-  description = "Create an IRSA role for the AIOps bot so it can call Bedrock, read RDS events, and read CloudWatch metrics."
-  type        = bool
-  default     = false
-}
-
-variable "aiops_namespace" {
-  description = "Namespace of the AIOps bot Kubernetes service account."
-  type        = string
-  default     = "bookgate"
-}
-
-variable "aiops_service_account_name" {
-  description = "Name of the AIOps bot Kubernetes service account."
-  type        = string
-  default     = "aiops-bot"
-}
 
 variable "bedrock_role_arn" {
   description = "ARN of the IAM role in Account B that the AIOps bot assumes to call Amazon Bedrock."

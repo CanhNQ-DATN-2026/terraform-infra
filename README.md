@@ -127,7 +127,7 @@ Expected keys to populate manually:
 | `eks_cluster_oidc_issuer` | IRSA trust setup |
 | `eks_oidc_provider_arn` | IRSA trust setup |
 | `backend_role_arn` | Passed into Helm value `apiService.serviceAccount.roleArn` |
-| `external_dns_role_arn` | Passed into Helm value `externalDns.serviceAccount.roleArn` |
+| `external_dns_role_arn` | Annotate the external-dns controller ServiceAccount |
 | `external_secrets_role_arn` | Annotate the external-secrets controller ServiceAccount |
 | `lbc_role_arn` | Used for AWS LBC install |
 | `db_credentials_secret_arn` | Read RDS password from Secrets Manager |
